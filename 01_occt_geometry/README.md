@@ -143,8 +143,7 @@ Its normalized direction is:
 
 $$
 \vec{d}
-=
-\left(
+= \left(
 \frac{3}{5},
 \frac{4}{5},
 0
