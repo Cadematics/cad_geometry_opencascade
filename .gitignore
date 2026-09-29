@@ -1,0 +1,43 @@
+# Build directories
+build/
+cmake-build-*/
+_build/
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Generated CAD files
+*.step
+*.stp
+*.iges
+*.igs
+
+# Generated data
+*.json
+*.csv
+
+# OS
+.DS_Store
