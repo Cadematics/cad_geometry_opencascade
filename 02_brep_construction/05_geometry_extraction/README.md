@@ -18,7 +18,7 @@ Surface classification
 Geometric parameters
 ```
 
-This is an important step toward building CAD geometry pipelines that operate on both **topology** and **geometry**.
+This is the final exercise in the `02_brep_construction` section and establishes the connection between **B-rep topology** and **underlying CAD geometry**.
 
 ---
 
@@ -30,9 +30,9 @@ For every face in a STEP model:
 2. Traverse all B-rep faces.
 3. Extract the underlying `Geom_Surface`.
 4. Identify its geometric type.
-5. Extract useful parameters from the surface.
+5. Extract useful geometric parameters.
 
-The exercise currently recognizes:
+The program recognizes:
 
 * Plane
 * Cylinder
@@ -69,79 +69,54 @@ Used to represent and traverse the model topology.
 BRep_Tool::Surface()
 ```
 
-This is the key operation in this exercise:
+The key operation is:
 
 ```cpp
 Handle(Geom_Surface) surface = BRep_Tool::Surface(face);
 ```
 
-A `TopoDS_Face` represents a **topological face**, while the `Geom_Surface` represents the underlying mathematical surface on which that face lies.
+A `TopoDS_Face` represents a **topological face**, while `Geom_Surface` represents the underlying mathematical surface.
 
-For example:
+---
+
+## Surface Classification
+
+The general structure is:
 
 ```text
 TopoDS_Face
-    │
-    └── Geom_Surface
-          ├── Geom_Plane
-          ├── Geom_CylindricalSurface
-          ├── Geom_SphericalSurface
-          ├── Geom_ConicalSurface
-          └── Geom_ToroidalSurface
+     │
+     └── Geom_Surface
+           │
+           ├── Geom_Plane
+           ├── Geom_CylindricalSurface
+           ├── Geom_SphericalSurface
+           ├── Geom_ConicalSurface
+           └── Geom_ToroidalSurface
 ```
+
+OpenCASCADE's runtime type system is used to determine the concrete surface type:
+
+```cpp
+surface->IsKind(STANDARD_TYPE(Geom_Plane))
+```
+
+The surface can then be safely converted using `DownCast`.
 
 ---
 
-## Why This Matters
-
-A B-rep is not only a collection of faces and edges.
-
-Each topological entity is associated with underlying geometric entities.
-
-For example, a cylindrical hole may appear in the topology as:
-
-```text
-Solid
- └── Shell
-      └── Face
-           └── Cylindrical Surface
-                ├── radius
-                └── axis
-```
-
-Being able to recover these geometric properties is fundamental for:
-
-* CAD feature recognition
-* geometric reasoning
-* face classification
-* machining feature extraction
-* mating detection
-* CAD similarity
-* B-rep graphs
-* parametric CAD reconstruction
-* ML-ready CAD representations
-
----
-
-## Surface Parameters
+## Extracted Parameters
 
 ### Plane
 
-For a planar face we extract:
+The program extracts:
 
 ```text
 Origin
 Normal
 ```
 
-Represented by:
-
-```cpp
-Geom_Plane
-gp_Pln
-```
-
-Conceptually:
+A plane can be described by:
 
 $$
 \mathbf{n}\cdot(\mathbf{x}-\mathbf{p}_0)=0
@@ -156,7 +131,7 @@ where:
 
 ### Cylinder
 
-For a cylindrical face we extract:
+The program extracts:
 
 ```text
 Radius
@@ -164,34 +139,16 @@ Axis origin
 Axis direction
 ```
 
-Represented by:
-
-```cpp
-Geom_CylindricalSurface
-```
-
-A cylinder can be described by:
-
-$$
-\|\mathbf{x}-\mathbf{c}(t)\|=R
-$$
-
-where \(R\) is the cylinder radius and the centerline is defined by the cylinder axis.
+A cylinder is defined by its radius and axis.
 
 ---
 
 ### Sphere
 
-For a spherical face we extract:
+The program extracts:
 
 ```text
 Radius
-```
-
-Represented by:
-
-```cpp
-Geom_SphericalSurface
 ```
 
 A sphere is defined by:
@@ -200,122 +157,147 @@ $$
 \|\mathbf{x}-\mathbf{c}\|=R
 $$
 
-where:
-
-* \(\mathbf{c}\) is the center
-* \(R\) is the radius
+where \(R\) is the radius.
 
 ---
 
 ### Cone
 
-For a conical face we extract:
+The program extracts:
 
 ```text
 Semi-angle
 Reference radius
 ```
 
-Represented by:
-
-```cpp
-Geom_ConicalSurface
-```
-
-The cone is defined by an axis, a reference point/radius, and a semi-angle.
-
 ---
 
 ### Torus
 
-For a toroidal face we extract:
+The program extracts:
 
 ```text
 Major radius
 Minor radius
 ```
 
-Represented by:
-
-```cpp
-Geom_ToroidalSurface
-```
-
-A torus is characterized by:
-
-* major radius \(R\)
-* minor radius \(r\)
-
 ---
 
-## Surface Classification
+## Test Models
 
-The program uses OpenCASCADE's runtime type system:
-
-```cpp
-surface->IsKind(STANDARD_TYPE(Geom_Plane))
-```
-
-and then safely converts the surface:
-
-```cpp
-Handle(Geom_Plane) plane =
-    Handle(Geom_Plane)::DownCast(surface);
-```
-
-This allows the same `Geom_Surface` interface to be classified into its concrete geometric type.
-
-Conceptually:
-
-```text
-Geom_Surface
-     │
-     ├── Plane
-     ├── Cylinder
-     ├── Sphere
-     ├── Cone
-     ├── Torus
-     └── Other
-```
-
----
-
-## Example Models
-
-This exercise uses two STEP models:
+Two STEP files are used.
 
 ### `cube_hole.step`
 
 A 20 × 20 × 20 mm cube with a cylindrical through-hole.
 
-Its geometry should contain:
+The B-rep contains:
 
 ```text
-Planar faces
-+
-Cylindrical face
+7 faces
+6 planar surfaces
+1 cylindrical surface
 ```
 
-This provides a simple example where topology alone is not sufficient to understand the shape.
+The extracted cylindrical surface has:
+
+```text
+Radius: 5
+Axis origin: 10, 10, -1
+Axis direction: 0, 0, 1
+```
+
+This corresponds to the cylindrical through-hole created in the previous exercise.
+
+---
 
 ### `PLATE.STEP`
 
-A more complex plate-like model containing multiple planar and non-planar geometric regions.
+A more complex plate-like STEP model.
 
-The model is useful for testing the surface-classification code against a less trivial B-rep.
+The B-rep contains:
+
+```text
+10 faces
+6 planar surfaces
+4 cylindrical surfaces
+```
+
+The cylindrical surfaces have radius:
+
+```text
+Radius: 5
+```
+
+Their axes are oriented along the Y direction.
+
+The extracted geometry demonstrates that multiple topological faces can reference cylindrical surfaces with different spatial locations.
+
+---
+
+## Results
+
+### `cube_hole.step`
+
+```text
+Surface classification
+----------------------
+
+Faces:                  7
+Planar surfaces:        6
+Cylindrical surfaces:   1
+```
+
+The model correctly identifies the six planar exterior faces and the cylindrical surface representing the through-hole.
+
+---
+
+### `PLATE.STEP`
+
+```text
+Surface classification
+----------------------
+
+Faces:                  10
+Planar surfaces:        6
+Cylindrical surfaces:   4
+```
+
+The program correctly identifies both planar and cylindrical regions of the model.
+
+---
+
+## Example Output
+
+For `cube_hole.step`:
+
+```text
+Face 7
+------
+Surface type: Cylinder
+Radius: 5
+Axis origin: 10, 10, -1
+Axis direction: 0, 0, 1
+```
+
+For `PLATE.STEP`:
+
+```text
+Face 1
+------
+Surface type: Cylinder
+Radius: 5
+Axis origin: 40, -7.5, 0
+Axis direction: -0, 1, -0
+```
+
+The `-0` values are numerical representations of zero and do not indicate a different geometric direction.
 
 ---
 
 ## Build
 
-The project uses the system OpenCASCADE installation:
-
-```text
-/usr/local/include/opencascade
-/usr/local/lib
-```
-
-Build with:
+Using the system OpenCASCADE 7.9.3 installation:
 
 ```bash
 g++ -std=c++17 \
@@ -338,13 +320,11 @@ g++ -std=c++17 \
 
 ## Run
 
-For the cube with a cylindrical hole:
-
 ```bash
 ./geometry_extraction cube_hole.step
 ```
 
-For the plate:
+and:
 
 ```bash
 ./geometry_extraction PLATE.STEP
@@ -352,83 +332,92 @@ For the plate:
 
 ---
 
-## Expected Processing Pipeline
+## Topology vs. Geometry
+
+This exercise reinforces one of the most important concepts in B-rep modeling.
+
+### Topology
+
+Describes connectivity:
 
 ```text
-                 STEP
-                  │
-                  ▼
-        STEPControl_Reader
-                  │
-                  ▼
-           TopoDS_Shape
-                  │
-                  ▼
-          TopExp_Explorer
-                  │
-                  ▼
-            TopoDS_Face
-                  │
-                  ▼
-       BRep_Tool::Surface()
-                  │
-                  ▼
-           Geom_Surface
-                  │
-          ┌───────┼────────┐
-          ▼       ▼        ▼
-        Plane  Cylinder   Sphere
-          │       │        │
-          ▼       ▼        ▼
-       normal   radius   radius
-       origin    axis
+Solid
+ └── Shell
+      └── Face
+           └── Edge
+                └── Vertex
 ```
 
----
+### Geometry
 
-## Connection to CAD Geometry Pipelines
-
-This exercise establishes an important distinction:
+Describes mathematical entities:
 
 ```text
-Topology                         Geometry
---------                         --------
-Solid                            Surface
-Shell                            Plane
-Face                             Cylinder
-Edge                             Sphere
-Vertex                           Cone
-                                 Torus
+Face  → Plane / Cylinder / Sphere / ...
+Edge  → Line / Circle / ...
+Vertex → Point
 ```
 
-The topology describes **how entities are connected**.
-
-The geometry describes **where those entities exist in space and what mathematical shapes they represent**.
-
-A useful CAD representation therefore needs both:
+Therefore a CAD model can be viewed as:
 
 ```text
 B-rep
- ├── topology
- │    ├── faces
- │    ├── edges
- │    └── vertices
+ ├── Topology
+ │    ├── Solids
+ │    ├── Shells
+ │    ├── Faces
+ │    ├── Edges
+ │    └── Vertices
  │
- └── geometry
-      ├── surfaces
-      ├── curves
-      └── points
+ └── Geometry
+      ├── Surfaces
+      ├── Curves
+      └── Points
 ```
 
-This separation is central to later exercises involving B-rep graphs, feature recognition, geometric reasoning, and CAD reconstruction.
+This distinction is fundamental to geometric reasoning.
 
 ---
 
-## Next Step
+## Why This Matters for CAD Geometry
 
-The next stage will build on this geometry information by adding **geometric and topological verification**.
+Surface classification provides information that cannot be obtained from topology alone.
 
-The longer-term pipeline is:
+For example:
+
+```text
+Face A → Plane
+Face B → Plane
+Face C → Cylinder
+```
+
+allows a geometry-processing system to reason about relationships such as:
+
+```text
+planar / cylindrical
+parallel / perpendicular
+same radius
+same axis
+coaxial
+coplanar
+```
+
+These relationships become useful for:
+
+* feature recognition
+* machining feature extraction
+* mating detection
+* geometric constraints
+* CAD similarity
+* B-rep graph construction
+* parametric CAD reconstruction
+* ML-ready CAD representations
+
+---
+
+## Position in the Portfolio Pipeline
+
+This exercise completes the initial B-rep construction and inspection pipeline:
 
 ```text
 STEP
@@ -437,15 +426,37 @@ B-rep
  ↓
 Topology
  ↓
-Geometry extraction
+Faces / Edges / Vertices
  ↓
+Underlying Geometry
+ ↓
+Surface Classification
+ ↓
+Geometric Parameters
+```
+
+The next section will build on this information by analyzing **relationships between topological entities**, including face adjacency, shared edges, and geometric relationships.
+
+Longer term, the portfolio will progress toward:
+
+```text
+CAD kernel
+    ↓
+B-rep
+    ↓
+Topology
+    ↓
+Geometry
+    ↓
 Verification
- ↓
-Feature recognition
- ↓
+    ↓
 B-rep graph
- ↓
+    ↓
+Feature recognition
+    ↓
 Reconstruction
- ↓
-CAD similarity / ML representation
+    ↓
+CAD similarity
+    ↓
+ML-ready representation
 ```
