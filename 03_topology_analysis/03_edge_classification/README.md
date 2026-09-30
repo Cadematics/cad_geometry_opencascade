@@ -1,31 +1,26 @@
-# Edge Classification
+# 03 — Edge Classification
 
-This exercise analyzes the edges of a STEP-based B-rep model and classifies each edge using both its underlying geometric curve and its topological relationships.
+This exercise analyzes the edges of a B-rep solid imported from a STEP file.
 
-The goal is to move from simply traversing B-rep topology to extracting structured geometric information that can later support feature recognition, B-rep graphs, CAD similarity, and machine-learning representations.
+The goal is to connect **topology** with the **underlying geometric representation** of each edge.
 
----
+For every edge, the program reports:
 
-## Learning Objectives
+* Edge ID
+* Underlying curve type
+* Curve length
+* Start/end vertex IDs
+* Incident face IDs
 
-This exercise demonstrates how to:
-
-* Load a STEP model with OpenCASCADE
-* Build stable indexed maps of edges and vertices
-* Access the geometric curve underlying a `TopoDS_Edge`
-* Classify curves by geometric type
-* Compute edge lengths
-* Identify the vertices belonging to each edge
-* Identify the faces incident to each edge
-* Distinguish geometric information from topological information
+This provides the foundation for more advanced CAD reasoning such as boundary detection, seam detection, convex/concave edge classification, feature recognition, and B-rep graph construction.
 
 ---
 
-## Concept
+## 1. Concept
 
-An OCCT edge is a **topological entity**.
+In OpenCASCADE, an edge is a **topological entity** that references an underlying geometric curve.
 
-The geometry associated with that edge is represented by a curve:
+The relationship is approximately:
 
 ```text
 TopoDS_Edge
@@ -43,286 +38,216 @@ Geom_Curve
      └── Geom_BSplineCurve
 ```
 
-This distinction is important:
-
-* **Topology** describes how entities are connected.
-* **Geometry** describes their mathematical shape.
-
-For example, an edge may be topologically connected to two faces while its underlying geometry is a circle.
-
----
-
-## Edge Information
-
-For each edge, the program extracts:
+The important distinction is:
 
 ```text
-Edge
- ├── ID
- ├── Curve type
- ├── Length
- ├── Start/end vertices
- └── Incident faces
+Topology                         Geometry
+--------                         --------
+Edge                             Curve
+Vertex                           Point
+Face                             Surface
 ```
 
-A typical result looks like:
-
-```text
-Edge 10
-  Curve type: Circle
-  Length: ...
-  Vertices: V8 V8
-  Faces: F3 F7
-```
-
-The exact IDs and values depend on the input STEP model.
-
----
-
-## Curve Classification
-
-The current implementation recognizes common OCCT curve types:
-
-| Curve type | OCCT class               |
-| ---------- | ------------------------ |
-| Line       | `Geom_Line`              |
-| Circle     | `Geom_Circle`            |
-| Ellipse    | `Geom_Ellipse`           |
-| Parabola   | `Geom_Parabola`          |
-| Hyperbola  | `Geom_Hyperbola`         |
-| Bezier     | `Geom_BezierCurve`       |
-| BSpline    | `Geom_BSplineCurve`      |
-| Other      | Other `Geom_Curve` types |
-
-The classification is performed using OCCT's dynamic type system:
-
-```cpp
-if (!curve.IsNull())
-{
-    if (!Handle(Geom_Line)::DownCast(curve).IsNull())
-        return "Line";
-
-    if (!Handle(Geom_Circle)::DownCast(curve).IsNull())
-        return "Circle";
-
-    // ...
-}
-```
-
-This allows the program to determine the mathematical representation of the edge.
-
----
-
-## Edge Length
-
-The underlying curve is accessed with:
-
-```cpp
-BRep_Tool::Curve(edge, first, last);
-```
-
-However, in OCCT 7.9, `GCPnts_AbscissaPoint::Length()` operates on an `Adaptor3d_Curve`.
-
-Therefore the implementation uses:
-
-```cpp
-BRepAdaptor_Curve adaptor(edge);
-
-double length =
-    GCPnts_AbscissaPoint::Length(
-        adaptor,
-        adaptor.FirstParameter(),
-        adaptor.LastParameter());
-```
-
-This is an important OCCT concept:
-
-```text
-TopoDS_Edge
-     │
-     ▼
-BRepAdaptor_Curve
-     │
-     ▼
-GCPnts_AbscissaPoint
-     │
-     ▼
-Curve length
-```
-
-The adaptor provides a common interface for numerical operations on different curve representations.
-
----
-
-## Topological Relationships
-
-The program also extracts the topological relationships associated with each edge.
-
-### Edge → Vertices
-
-Each edge is associated with its endpoint vertices.
+An edge therefore contains topological information such as which faces and vertices it connects, while its underlying curve describes its geometric shape.
 
 For example:
 
 ```text
-Edge 1
-  Vertices: V1 V2
-```
-
-The vertex IDs come from an indexed topology map:
-
-```cpp
-TopTools_IndexedMapOfShape vertexMap;
-
-TopExp::MapShapes(
-    shape,
-    TopAbs_VERTEX,
-    vertexMap);
-```
-
-An edge can then be associated with its vertices using:
-
-```cpp
-TopExp_Explorer explorer(
-    edge,
-    TopAbs_VERTEX);
-```
-
----
-
-### Edge → Faces
-
-An edge can also be associated with the faces that use it.
-
-The relationship is constructed using:
-
-```cpp
-TopExp::MapShapesAndAncestors(
-    shape,
-    TopAbs_EDGE,
-    TopAbs_FACE,
-    edgeFaceMap);
-```
-
-This produces a relationship of the form:
-
-```text
 Edge
- ├── Face
- └── Face
+ ├── Curve: Circle
+ ├── Length: 31.4159
+ ├── Vertices: V8 V8
+ └── Faces: F3 F7
 ```
 
-For a normal shared edge, two distinct faces commonly reference the edge.
-
-However, an edge can also have special topological behavior, such as a **seam edge**, where the same face appears on both sides of the edge.
-
-Therefore, code should not blindly assume that the two incident faces are always distinct.
+The repeated vertex ID is expected for a circular seam edge. A closed geometric curve can have the same topological vertex at both ends.
 
 ---
 
-## Geometric vs. Topological Classification
+## 2. What This Exercise Demonstrates
 
-This exercise intentionally separates two different kinds of information.
+The program combines information from several parts of the OpenCASCADE geometry/topology model.
 
-### Geometric classification
+### Curve classification
 
-Answers:
+The underlying `Geom_Curve` is inspected using its dynamic type.
 
-> What mathematical curve is this edge?
-
-Examples:
+Currently supported classifications are:
 
 ```text
 Line
 Circle
 Ellipse
+Parabola
+Hyperbola
+Bezier
 BSpline
-...
+Other
 ```
 
-### Topological classification
+### Curve length
 
-Answers:
-
-> How is this edge connected to the rest of the B-rep?
-
-Examples include:
-
-```text
-Boundary edge
-Shared edge
-Seam edge
-Degenerate edge
-```
-
-These classifications are related, but they are not the same.
-
-For example:
-
-```text
-Circle + shared edge
-Circle + seam edge
-Line + shared edge
-Line + boundary edge
-```
-
-are all possible combinations.
-
-Keeping geometry and topology separate is important when building higher-level CAD representations.
-
----
-
-## Indexed Topology
-
-The exercise uses OCCT indexed maps to give topology entities stable IDs during analysis:
+Curve length is computed using:
 
 ```cpp
-TopTools_IndexedMapOfShape edgeMap;
-TopTools_IndexedMapOfShape vertexMap;
+BRepAdaptor_Curve
 ```
 
-with:
+together with:
 
 ```cpp
-TopExp::MapShapes(
-    shape,
-    TopAbs_EDGE,
-    edgeMap);
-
-TopExp::MapShapes(
-    shape,
-    TopAbs_VERTEX,
-    vertexMap);
+GCPnts_AbscissaPoint::Length()
 ```
 
-This allows relationships to be represented using compact integer IDs:
+The adaptor is used because the OCCT 7.9 API expects an `Adaptor3d_Curve` for this calculation.
+
+### Topological connectivity
+
+The program also builds indexed maps of:
 
 ```text
-Edge 3 → V3 V4
-Edge 3 → F1 F4
+Face
+Edge
+Vertex
 ```
 
-These IDs are local to the analyzed shape and are useful for constructing structured representations such as:
+and determines:
 
 ```text
 Edge → Vertices
 Edge → Faces
-Face → Edges
 ```
 
-They also provide a foundation for the B-rep graph developed later in the project.
+This makes it possible to reason about both the geometry and topology of an edge.
 
 ---
 
-## Example Output
+## 3. Example
 
-The program produces output similar to:
+For a box with a cylindrical through-hole, the output contains both linear and circular edges:
+
+```text
+Edge 1
+  Curve type: Line
+  Length: 20
+  Vertices: V1 V2
+  Faces: F1 F2
+
+...
+
+Edge 10
+  Curve type: Circle
+  Length: 31.4159
+  Vertices: V8 V8
+  Faces: F3 F7
+```
+
+The circular edge has:
+
+```text
+Length ≈ π × diameter
+      ≈ π × 10
+      ≈ 31.4159
+```
+
+The repeated vertex:
+
+```text
+V8 V8
+```
+
+indicates that the circular edge is closed in the underlying geometry.
+
+Another example is an edge that belongs to only one face:
+
+```text
+Faces: F7
+```
+
+Such an edge would be a candidate for a boundary edge. This distinction will be used in a later exercise.
+
+---
+
+## 4. Building
+
+This project uses the system OpenCASCADE installation.
+
+Expected environment:
+
+```text
+OpenCASCADE 7.9.x
+g++ 13+
+C++17
+```
+
+From this directory:
+
+```bash
+g++ -std=c++17 \
+    main.cpp \
+    -I/usr/local/include/opencascade \
+    -L/usr/local/lib \
+    -Wl,-rpath,/usr/local/lib \
+    -l:libTKDESTEP.so.7.9.3 \
+    -l:libTKXSBase.so.7.9.3 \
+    -l:libTKTopAlgo.so.7.9.3 \
+    -l:libTKBRep.so.7.9.3 \
+    -l:libTKGeomBase.so.7.9.3 \
+    -l:libTKG3d.so.7.9.3 \
+    -l:libTKMath.so.7.9.3 \
+    -l:libTKernel.so.7.9.3 \
+    -o edge_classification
+```
+
+The `rpath` option allows the executable to find the OpenCASCADE libraries in:
+
+```text
+/usr/local/lib
+```
+
+without requiring `LD_LIBRARY_PATH`.
+
+---
+
+## 5. Running
+
+The program accepts the STEP file path as a command-line argument.
+
+### Generic usage
+
+```bash
+./edge_classification path/to/model.step
+```
+
+For example:
+
+```bash
+./edge_classification ../../models/cube_hole.step
+```
+
+or:
+
+```bash
+./edge_classification ../../models/PLATE.STEP
+```
+
+The program is not tied to either of these models. Any compatible STEP file can be supplied:
+
+```bash
+./edge_classification /path/to/your/model.step
+```
+
+---
+
+## 6. Output
+
+The output has the following general structure:
 
 ```text
 EDGE CLASSIFICATION
 ===================
 
-Edges: ...
+Edges: N
 
 Edge 1
   Curve type: Line
@@ -339,119 +264,204 @@ Edge 2
 ...
 ```
 
-The output is intentionally simple. The important part is the structured information being extracted from the B-rep.
+The IDs are generated from the topology maps created for the imported STEP model.
+
+They are useful for relating this exercise to the previous topology-analysis exercises.
 
 ---
 
-## Why This Matters for CAD Geometry
+## 7. Relationship to Previous Exercises
 
-Edge classification is a basic building block for higher-level CAD reasoning.
+This exercise builds directly on the previous B-rep topology work.
 
-For example, a system could combine:
+### Previous exercise
+
+`02_incidence_and_adjacency`
+
+Established:
 
 ```text
-Edge geometry
-      +
-Edge topology
-      +
-Adjacent face geometry
-      +
-Edge length
-      +
-Vertex relationships
+Face → Edges
+Edge → Faces
+Edge → Vertices
+Vertex → Edges
+Face ↔ Face
 ```
 
-to identify geometric patterns.
+### This exercise
 
-A possible progression is:
+Adds geometric information:
 
 ```text
-Raw STEP
-   ↓
-B-rep topology
-   ↓
-Edge classification
-   ↓
+Edge
+ ├── Curve type
+ ├── Length
+ ├── Vertices
+ └── Faces
+```
+
+The resulting representation is therefore:
+
+```text
+             B-REP
+               │
+        ┌──────┴──────┐
+        │             │
+     Topology      Geometry
+        │             │
+      Edge        Geom_Curve
+        │             │
+   ┌────┴────┐   ┌────┴─────┐
+   │         │   │          │
+Vertices   Faces Line      Circle
+                       ...
+```
+
+This is an important step toward treating CAD models as structured data rather than simply as meshes or collections of triangles.
+
+---
+
+## 8. Important CAD Concepts
+
+### Topological edge vs geometric curve
+
+A `TopoDS_Edge` is not simply a mathematical curve.
+
+It is a topological entity that references geometric information.
+
+For example, several topological edges can reference geometrically similar curves, while their topological role in the B-rep can be different.
+
+This distinction becomes important when analyzing CAD models.
+
+---
+
+### Closed curves and seam edges
+
+A circular surface is periodic.
+
+Consequently, an edge representing a circular seam may have the same vertex at both ends:
+
+```text
+V8 → V8
+```
+
+For example:
+
+```text
+Edge 10
+  Curve type: Circle
+  Vertices: V8 V8
+```
+
+This should not automatically be interpreted as an invalid zero-length edge.
+
+The geometric curve can still have a finite length:
+
+```text
+Length = 2πr
+```
+
+---
+
+### Edge incidence
+
+An edge can have different topological relationships with faces.
+
+For example:
+
+```text
+Edge → F1 F2
+```
+
+means the edge is shared by two faces.
+
+A later exercise will use this information to distinguish:
+
+```text
+Boundary edge
+Shared edge
+Seam edge
+Degenerate edge
+```
+
+These classifications are more meaningful for CAD reasoning than curve type alone.
+
+---
+
+## 9. Current Scope
+
+The current implementation intentionally focuses on two layers:
+
+### Geometric classification
+
+```text
+Line
+Circle
+Ellipse
+Parabola
+Hyperbola
+Bezier
+BSpline
+Other
+```
+
+### Basic topology
+
+```text
+Edge → Vertices
+Edge → Faces
+```
+
+It does **not** yet attempt to determine:
+
+* boundary vs shared edges
+* seam edges
+* degenerate edges
+* convex vs concave edges
+* tangent edges
+* feature boundaries
+* geometric continuity
+* edge curvature
+* feature semantics
+
+Those are left for subsequent topology-analysis exercises.
+
+---
+
+## 10. Next Step
+
+The next stage is to classify the **topological role** of each edge.
+
+The planned progression is:
+
+```text
+03_edge_classification
+        │
+        ▼
+Curve type + length + connectivity
+        │
+        ▼
+Boundary / Shared / Seam / Degenerate
+        │
+        ▼
 Face relationships
-   ↓
+        │
+        ▼
+Shell and manifold analysis
+        │
+        ▼
 Feature candidates
-   ↓
+        │
+        ▼
 B-rep graph
-   ↓
-CAD representation
 ```
 
-This is particularly relevant to CAD geometry pipelines because geometric entities alone are not sufficient. Their relationships and connectivity are equally important.
+The important transition is from:
 
----
+> "What geometric curve is this?"
 
-## Current Scope
+to:
 
-This exercise currently focuses on:
+> "What role does this edge play in the B-rep?"
 
-* Curve type
-* Curve length
-* Edge vertices
-* Incident faces
-
-It does **not** yet attempt full feature recognition.
-
-The following classifications are intentionally left for subsequent exercises:
-
-* Boundary vs. shared edges
-* Seam edges
-* Degenerate edges
-* Convex vs. concave edges
-* Tangent edges
-* Geometric relationships between adjacent faces
-
-These will build on the topology established here.
-
----
-
-## OpenCASCADE Concepts Used
-
-Main OCCT classes and APIs:
-
-```text
-STEPControl_Reader
-TopoDS_Shape
-TopoDS_Edge
-TopExp_Explorer
-TopExp
-TopTools_IndexedMapOfShape
-TopTools_IndexedDataMapOfShapeListOfShape
-
-BRep_Tool
-BRepAdaptor_Curve
-GCPnts_AbscissaPoint
-
-Geom_Curve
-Geom_Line
-Geom_Circle
-Geom_Ellipse
-Geom_Parabola
-Geom_Hyperbola
-Geom_BezierCurve
-Geom_BSplineCurve
-```
-
----
-
-## Key Takeaway
-
-The important concept in this exercise is the distinction between **topological edges** and their **underlying geometric curves**.
-
-An edge is not simply "a line" or "a circle." It is a topological entity that references geometry and participates in relationships with vertices and faces.
-
-That distinction provides the foundation for the next stages of the project:
-
-```text
-Geometry
-   +
-Topology
-   +
-Relationships
-   ↓
-CAD reasoning
-```
+That distinction is fundamental for higher-level CAD reasoning and feature recognition.
