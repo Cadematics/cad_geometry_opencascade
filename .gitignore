@@ -3,6 +3,8 @@ build/
 cmake-build-*/
 _build/
 
+README_01.md
+
 # Compiled files
 *.o
 *.obj
